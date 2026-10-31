@@ -786,9 +786,22 @@ export const defaultApplyEvents = (
           applyMutation(mutation);
 
           if (mutation.stopPropagation !== true) {
+            // A subscriber that returned replacement messages left targetToolCall
+            // pointing into the discarded array, so resolve the call again in the
+            // retained one. Only then: this event fires per streamed chunk.
+            const retainedToolCall =
+              mutation.messages === undefined
+                ? targetToolCall
+                : messages
+                    .flatMap((m) => (m as AssistantMessage).toolCalls ?? [])
+                    .find((tc) => tc.id === toolCallId);
+            if (!retainedToolCall) {
+              console.warn(`TOOL_CALL_ARGS: Tool call '${toolCallId}' was removed by a subscriber`);
+              return emitUpdates();
+            }
             // Append the arguments to the correct tool call by ID
-            targetToolCall.function.arguments += delta;
-            applyEventMetadata(targetToolCall, event);
+            retainedToolCall.function.arguments += delta;
+            applyEventMetadata(retainedToolCall, event);
             applyMutation({ messages });
           }
 
